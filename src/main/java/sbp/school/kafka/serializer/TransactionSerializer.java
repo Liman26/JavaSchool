@@ -12,8 +12,10 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sbp.school.kafka.model.Transaction;
+import sbp.school.kafka.util.Validation;
 
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,14 +32,15 @@ public class TransactionSerializer implements Serializer<Transaction> {
 
     @Override
     public byte[] serialize(String s, Transaction transaction) {
+
         if (transaction != null) {
             ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm"));
             objectMapper.registerModule(new JavaTimeModule());
 
             try {
                 String value = objectMapper.writeValueAsString(transaction);
-                validateWithSchema(objectMapper.readTree(value));
-
+                Validation.validateWithSchema(objectMapper.readTree(value));
                 return value.getBytes(StandardCharsets.UTF_8);
             } catch (JsonProcessingException e) {
                 log.error("Ошибка в serialize: {}", e.getMessage());
@@ -46,22 +49,4 @@ public class TransactionSerializer implements Serializer<Transaction> {
         }
         return new byte[0];
     }
-
-    private void validateWithSchema(JsonNode data) {
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4);
-        JsonSchema jsonSchema = factory.getSchema(
-                TransactionSerializer.class.getResourceAsStream("/transaction.json")
-        );
-        Set<ValidationMessage> messages =  jsonSchema.validate(data);
-        if(!messages.isEmpty()) {
-            throw new RuntimeException("Ошибка при валидации по схеме: " +
-                    String.join(
-                            ";",
-                            messages.stream().map(ValidationMessage::getMessage)
-                                    .collect(Collectors.toSet())
-                    )
-            );
-        }
-    }
-
 }
